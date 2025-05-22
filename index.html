@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Field Data Logger - Fixed Layout</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        input, button, select, textarea { margin: 5px 0; padding: 6px; }
+        label { font-weight: bold; margin: 0; }
+        .row { display: flex; gap: 20px; flex-direction: row; justify-content: space-between; }
+        .column { flex: 1; }
+        .input-group { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+        .input-group label { width: 60px; }
+        .input-group input { width: 150px; }
+        .input-group textarea { width: 350px; height: 34px; resize: none; }
+    </style>
+</head>
+<body>
+<h2>Offline Field Data Entry App</h2>
+<label>Select Variable:</label>
+<select id="variableSelect" onchange="selectVariable()">
+    <option value="" disabled selected>Select or Add Variable</option>
+</select>
+<label>Or Add New Variable:</label>
+<input type="text" id="newVariable" placeholder="e.g., Temperature">
+<button onclick="addVariable()">Add Variable</button>
+<div id="entryArea" style="display:none;">
+    <label>Select Date:</label>
+    <input type="date" id="entryDate">
+    <div class="row" id="sampleInputsRow">
+        <div class="column" id="col1"></div>
+        <div class="column" id="col2"></div>
+        <div class="column" id="col3"></div>
+    </div>
+    <button onclick="saveEntry()">Save Data</button>
+</div>
+<button onclick="downloadExcel()">Download Excel</button>
+<script>
+const col1 = ["2-1", "2-2", "2-3", "2-4", "2-5", "2-6", "2-7", "3-1", "3-2", "3-3", "3-4", "3-5", "3-6", "3-7", "1-1", "1-2", "1-3", "1-4", "1-5", "1-6", "1-7", "4-1", "4-2", "4-3", "4-4", "4-5", "4-6", "4-7"];
+const col2 = ["3-8", "3-9", "3-10", "3-11", "3-12", "3-13", "3-14", "4-8", "4-9", "4-10", "4-11", "4-12", "4-13", "4-14", "2-8", "2-9", "2-10", "2-11", "2-12", "2-13", "2-14", "1-8", "1-9", "1-10", "1-11", "1-12", "1-13", "1-14"];
+const col3 = ["4-15", "4-16", "4-17", "4-18", "4-19", "4-20", "4-21", "1-15", "1-16", "1-17", "1-18", "1-19", "1-20", "1-21", "3-15", "3-16", "3-17", "3-18", "3-19", "3-20", "3-21", "2-15", "2-16", "2-17", "2-18", "2-19", "2-20", "2-21"];
+const allSamples = col1.concat(col2).concat(col3);
+let variables = {};
+let remarks = {};
+let currentVariable = "";
+function addVariable() {
+    const varName = document.getElementById("newVariable").value.trim();
+    if (!varName) {
+        alert("Enter a valid variable name.");
+        return;
+    }
+    if (variables[varName]) {
+        alert("Variable already exists. Please select from the dropdown.");
+        return;
+    }
+    variables[varName] = {};
+    remarks[varName] = {};
+    let dropdown = document.getElementById("variableSelect");
+    let option = document.createElement("option");
+    option.text = varName;
+    option.value = varName;
+    dropdown.add(option);
+    dropdown.value = varName;
+    selectVariable();
+    document.getElementById("newVariable").value = "";
+}
+function selectVariable() {
+    currentVariable = document.getElementById("variableSelect").value;
+    if (!currentVariable) return;
+    document.getElementById("entryArea").style.display = "block";
+    ["col1", "col2", "col3"].forEach(id => {
+        document.getElementById(id).innerHTML = "";
+    });
+    const groups = { col1, col2, col3 };
+    for (let col in groups) {
+        const parent = document.getElementById(col);
+        groups[col].forEach(sample => {
+            const group = document.createElement("div");
+            group.className = "input-group";
+            const label = document.createElement("label");
+            label.innerText = sample;
+            const input = document.createElement("input");
+            input.type = "number";
+            input.step = "any";
+            input.id = "val_" + sample;
+            const note = document.createElement("textarea");
+            note.placeholder = "Remark";
+            note.id = "remark_" + sample;
+            group.appendChild(label);
+            group.appendChild(input);
+            group.appendChild(note);
+            parent.appendChild(group);
+        });
+    }
+}
+function saveEntry() {
+    const date = document.getElementById("entryDate").value;
+    if (!date) {
+        alert("Please select a date.");
+        return;
+    }
+    if (!variables[currentVariable]) {
+        variables[currentVariable] = {};
+    }
+    if (!remarks[currentVariable]) {
+        remarks[currentVariable] = {};
+    }
+    allSamples.forEach(sample => {
+        const val = document.getElementById("val_" + sample).value;
+        const note = document.getElementById("remark_" + sample).value;
+        if (!variables[currentVariable][sample]) {
+            variables[currentVariable][sample] = {};
+        }
+        if (!remarks[currentVariable][sample]) {
+            remarks[currentVariable][sample] = {};
+        }
+        variables[currentVariable][sample][date] = val;
+        remarks[currentVariable][sample][date] = note;
+    });
+    alert("Data saved for " + currentVariable + " on " + date);
+}
+function downloadExcel() {
+    const wb = XLSX.utils.book_new();
+    Object.keys(variables).forEach(varName => {
+        const allDates = new Set();
+        Object.values(variables[varName]).forEach(entry => {
+            Object.keys(entry).forEach(date => allDates.add(date));
+        });
+        const sortedDates = Array.from(allDates).sort();
+        const header = ["Sample"];
+        sortedDates.forEach(date => {
+            header.push(date);
+            header.push(date + "_Remark");
+        });
+        const data = [header];
+        allSamples.forEach(sample => {
+            const row = [sample];
+            const sampleData = variables[varName][sample] || {};
+            const sampleRemarks = remarks[varName][sample] || {};
+            sortedDates.forEach(date => {
+                row.push(sampleData[date] || "");
+                row.push(sampleRemarks[date] || "");
+            });
+            data.push(row);
+        });
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, varName.slice(0, 31));
+    });
+    XLSX.writeFile(wb, "FieldData_CompactFixedLayout.xlsx");
+}
+</script>
+</body>
+</html>
